@@ -20,17 +20,14 @@ __global__ void kernel(unsigned int* d_data,
     uint* gmem_ptr = d_data;
 
     auto start = clock64();
-#pragma unroll 1
-    for (int i = 0; i < data_size; i+=4) {
-        uint32_t smem_int_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
-        asm volatile("cp.async.cg.shared.global [%0], [%1], %2;\n" ::"r"(smem_int_ptr),
-                   "l"(gmem_ptr), "n"(16));
-        smem_ptr += 4;
-        gmem_ptr += 4;
-    }
+    asm volatile(
+        "cp.async.bulk.shared.global [%0], [%1], %2;\n" 
+        : 
+        : "l"(smem_addr), "l"(gmem_addr), "n"(sizeof(unsigned int) * data_size) 
+    );
 
-    asm volatile("cp.async.commit_group;\n" ::);
-    asm volatile("cp.async.wait_group 0;\n" ::);
+    asm volatile("cp.async.bulk.commit_group;\n" ::);
+    asm volatile("cp.async.bulk.wait_group 0;\n" ::);
     auto end = clock64();
     // Main measurement loop.
 #pragma unroll 1
