@@ -16,14 +16,14 @@ __global__ void kernel(unsigned int* d_data,
     volatile unsigned long long value = 0;
 
     __syncthreads();
-    uint* smem_ptr = smem;
-    uint* gmem_ptr = d_data;
+    unsigned long long smem_addr = static_cast<unsigned long long>(__cvta_generic_to_shared(smem));
+    unsigned long long gmem_addr = reinterpret_cast<unsigned long long>(d_data);
 
     auto start = clock64();
     asm volatile(
         "cp.async.bulk.shared.global [%0], [%1], %2;\n" 
         : 
-        : "l"(smem_addr), "l"(gmem_addr), "n"(sizeof(unsigned int) * data_size) 
+        : "l"(smem_addr), "l"(gmem_addr), "n"(232448) 
     );
 
     asm volatile("cp.async.bulk.commit_group;\n" ::);
