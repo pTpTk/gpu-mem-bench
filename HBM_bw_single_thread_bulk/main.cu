@@ -16,8 +16,8 @@ __global__ void kernel(unsigned int* d_data,
     volatile unsigned long long value = 0;
 
     __syncthreads();
-    unsigned long long smem_addr = static_cast<unsigned long long>(__cvta_generic_to_shared(smem));
-    unsigned long long gmem_addr = reinterpret_cast<unsigned long long>(d_data);
+    size_t smem_addr = static_cast<size_t>(__cvta_generic_to_shared(smem));
+    size_t gmem_addr = static_cast<size_t>(__cvta_generic_to_global(d_data));
 
     auto start = clock64();
     asm volatile(
