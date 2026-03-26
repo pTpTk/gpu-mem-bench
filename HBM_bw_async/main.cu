@@ -6,6 +6,7 @@
 #include <curand_kernel.h>
 #include <time.h>
 #include <nvml.h>
+#include <cassert>
 
 __global__ void kernel(unsigned int* d_data,
                          unsigned int freq,
@@ -15,20 +16,26 @@ __global__ void kernel(unsigned int* d_data,
     volatile unsigned long long accumulator = 0;
     volatile unsigned long long value = 0;
 
-    uint block_segment = data_size / gridDim.x;
-    uint block_base = blockIdx.x * block_segment;
-    uint warp_segment = block_segment / blockDim.z / 4;
-    uint offset = block_base + ((32 * threadIdx.z + threadIdx.x) / 8) * warp_segment;
+    uint block_size = data_size / gridDim.x;
+    uint block_base = blockIdx.x * block_size;
+    uint warp_size = block_size / blockDim.z;
+    uint warp_base = threadIdx.z * warp_size;
+    // const uint segment_size = 3168;
+    uint segment_size = warp_size / 4;
+    uint segment_base = threadIdx.x / 8 * segment_size;
+    uint thread_base = (threadIdx.x % 8) * 4;
+    uint gmem_offset = block_base + warp_base + segment_base + thread_base;
+    uint smem_offset = warp_base + segment_base + thread_base;
 
-    uint* smem_ptr = smem + offset;
-    uint* gmem_ptr = d_data + offset;
+    uint* smem_ptr = smem + smem_offset;
+    uint* gmem_ptr = d_data + gmem_offset;
 
     __syncthreads();
     // Main measurement loop.
 
     auto start = clock64();
 #pragma unroll 1
-    for (int i = 0; i < warp_segment; i+=32) {
+    for (int i = 0; i < segment_size; i+=32) {
         uint32_t smem_int_ptr = static_cast<uint32_t>(__cvta_generic_to_shared(smem_ptr));
         asm volatile("cp.async.cg.shared.global [%0], [%1], %2;\n" ::"r"(smem_int_ptr),
                    "l"(gmem_ptr), "n"(16));
@@ -44,13 +51,13 @@ __global__ void kernel(unsigned int* d_data,
 
     if(threadIdx.x == 0) {
         #pragma unroll 1
-        for (int i = 0; i < data_size; i++) {
+        for (int i = 0; i < block_size; i++) {
             accumulator += smem[i];
             value += accumulator;
         }
 
         // Dummy write to force retention.
-        d_data[blockIdx.x * blockDim.x * blockDim.z + threadIdx.x] = value;
+        d_data[blockIdx.x * blockDim.x * blockDim.z + threadIdx.z] = value;
         printf("clock diff %.2fus\n", (float)(end - start)/freq);
     }
 
