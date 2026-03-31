@@ -32,7 +32,8 @@ __global__ void kernel(unsigned int* d_data,
 
     __syncthreads();
     // Main measurement loop.
-
+    unsigned long long start_offset;
+    asm volatile("mov.u64 %0, %%globaltimer;" : "=l"(start_offset));
     auto start = clock64();
 #pragma unroll 1
     for (int i = 0; i < segment_size; i+=32) {
@@ -58,7 +59,7 @@ __global__ void kernel(unsigned int* d_data,
 
         // Dummy write to force retention.
         d_data[blockIdx.x * blockDim.x * blockDim.z + threadIdx.z] = value;
-        printf("clock diff %.2fus\n", (float)(end - start)/freq);
+        printf("start offset: %ld, clock diff %.2fus\n", start_offset, (float)(end - start)/freq);
     }
 
 }
